@@ -6,6 +6,8 @@
 #define PIN 6
 #define NUM_LEDS 150
 
+#define WHITE_PIN 4
+
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, PIN, NEO_GRB | NEO_KHZ800);
 
 const uint32_t colors[] = {
@@ -24,18 +26,40 @@ const int ncolors = sizeof(colors) / sizeof(*colors);
 void setup() {
   strip.begin();
   strip.show();
+  pinMode(WHITE_PIN, INPUT_PULLUP);
 }
 
-void loop() {
-  for (int i = 0; i < 12; i += 1) {
+void loop_color() {
+  for (int i = 0; i < NUM_LEDS/12; i += 1) {
     int pos = random(NUM_LEDS);
     if (random(100) < 20) {
-      int color = random(ncolors);
-      strip.setPixelColor(pos, colors[color]);
-    } else {
-      strip.setPixelColor(pos, 0);
-    }
+     int color = random(ncolors);
+     strip.setPixelColor(pos, colors[color]);
+   } else {
+     strip.setPixelColor(pos, 0);
+   }
   }
   strip.show();
   delay(240);
+}
+
+void loop_white() {
+  for (int i = 0; i < NUM_LEDS/12; i += 1) {
+    int pos = random(NUM_LEDS);
+    if (random(100) < 5) {
+      strip.setPixelColor(pos, 0x0);
+    } else {
+      strip.setPixelColor(pos, 0x99ffaa);
+    }
+  }
+  strip.show();
+  delay(24);
+}
+
+void loop() {
+  if (digitalRead(WHITE_PIN)) {
+    loop_white();
+  } else {
+    loop_color();
+  }
 }

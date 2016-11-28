@@ -20,6 +20,14 @@ I used an Adafruit Pro Trinket for mine, which has 150+ lights.
 
 Of course, a standard Arduino will work just fine too!
 
+This was coded to color-correct a specific type of GRB LEDs on wires I got from Amazon.
+It's coded to match the lights we already have, which are biased toward yellow and amber.
+
+You may have gotten lights wired RGB, in which case this is going to look very green.
+It should be just a matter of switching the first two bytes in each color definition
+to go from GRB to RGB.
+
+
 
 Setup
 -------
@@ -34,7 +42,7 @@ You can plug the LED strip into the +5v on the power supply;
 You can power your microcontroller from the beefier power supply, too,
 so you don't have to run USB just to power the microcontroller.
 
-This was coded to color-correct a specific type of GRB LEDs on wires I got from Amazon.
-It's coded to match the lights we already have, which are biased toward yellow and amber.
-Some of the lights are wired differently and the colors are going to be wrong.
-Play around, commenting out all but one color, to see if it's right.
+The code as written wants pin 4 to be connected to ground.
+When you disconnect it,
+the whole strand goes white.
+My family has a tradition of the tree going from colors to white on the morning of the 25th.
