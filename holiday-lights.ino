@@ -32,13 +32,20 @@
 // Color for all-white mode
 #define WHITE 0x886655
 
+// Some units of time
+#define MILLISECOND 1L
+#define SECOND (1000 * MILLISECOND)
+#define MINUTE (60 * SECOND)
+#define HOUR (60 * MINUTE)
+#define DAY (24 * HOUR)
+
 // The Neopixel library masks interrupts while writing.
 // This means you lose time.
 // How much time do you lose?
 // I'm guessing 10 minutes a day.
-#define SNOSSLOSS (10 * 60 * 1000)
-#define DAY (24 * 60 * 60 * 1000 - SNOSSLOSS)
-#define ON_FOR (5 * 60 * 60 * 1000)
+
+#define SNOSSLOSS_DAY (DAY - (10 * MINUTE))
+#define ON_FOR (5 * HOUR)
 
 const char *messages[] = {
     "happy holiday ARK",
@@ -154,7 +161,7 @@ void loop() {
     white = !white;
   }
 
-  if (forever || white || (millis() % DAY < ON_FOR)) {
+  if (FOREVER || white || (millis() % SNOSSLOSS_DAY < ON_FOR)) {
     update |= strandUpdate(white);
     update |= morseUpdate();
   } else {
