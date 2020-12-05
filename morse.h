@@ -16,22 +16,22 @@ class MorseEncoder {
    */
   void SetText(const char *s);
 
-    /** Tick tells the encoder that a dit has elapsed.
-     * 
-     * Returns true if there's data left to transmit.
-     * If it returns false, you need to feed it more data.
-     * 
-     * You should call this every time your dit duration ends.
-     */
-    bool Tick();
+  /** Tick tells the encoder that a dit has elapsed.
+    * 
+    * Returns true if there's data left to transmit.
+    * If it returns false, you need to feed it more data.
+    * 
+    * You should call this every time your dit duration ends.
+    */
+  bool Tick();
 
-    /** Quiet stops transmitting for this many ticks.
-     */
-    void Quiet(int ticks);
+  /** Quiet stops transmitting for this many ticks.  
+   */
+  void Quiet(int ticks);
 
-    /** Transmitting is true if you should be transmitting right now.
-     */
-    bool Transmitting;
+  /** Transmitting is true if you should be transmitting right now.  
+   */
+  bool Transmitting;
 
  private:
   const char *p;

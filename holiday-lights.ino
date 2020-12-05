@@ -1,20 +1,36 @@
-#include <Adafruit_NeoPixel.h>
-#include <EEPROM.h>
+#if defined(__AVR_ATtiny85__)
+#define TINY
+#endif
+
+#include <FastLED.h>
 #include "bounce2.h"
 #include "morse.h"
 
 // Do you want it to run forever, or cycle every 24 hours?
+#ifdef TINY
+#define FOREVER true
+#else
 #define FOREVER false
+#endif
 
 // Which pin your LED strip is connected to
+#ifdef TINY
+#define NEOPIXEL_PIN 3
+#else
 #define NEOPIXEL_PIN 6
+#endif
 
 // Which pin has the momentary switch to toggle full white.
 #define BUTTON_PIN 4
 
 // How many LEDs you have. It's okay if this is too big.
 #define LEDS_PER_GROUP 10
+#ifdef TINY
+#define NUM_GROUPS 7
+#else
 #define NUM_GROUPS 20
+#endif
+#define NUM_LEDS (LEDS_PER_GROUP * NUM_GROUPS)
 
 // How many milliseconds between activity in one group
 #define DELAY_MS 600
@@ -48,13 +64,11 @@
 #define ON_FOR (5 * HOUR)
 
 const char *messages[] = {
-    "happy holiday ARK",
-    "seasons greetings ARK",
-    "happy festivus ARK",
-    "merry christmas ARK",
-    "hanukkah sameach ARK",
-    "happy solstice ARK",
-    "happy new year ARK",
+    "seasons greetings",
+    "happy holiday",
+    "merry xmas",
+    "happy new year",
+    "CQ CQ OF9X",
 };
 const int nmessages = sizeof(messages) / sizeof(*messages);
 
@@ -77,18 +91,13 @@ const uint32_t colors[] = {
 };
 const int ncolors = sizeof(colors) / sizeof(*colors);
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_GROUPS * LEDS_PER_GROUP, NEOPIXEL_PIN, NEO_RGB | NEO_KHZ800);
+CRGB leds[NUM_LEDS];
 Bounce button;
 
-int mode;
-int nextMode;
-
 void setup() {
-  strip.begin();
-  strip.show();
+  FastLED.addLeds<WS2812, NEOPIXEL_PIN, RGB>(leds, NUM_LEDS);
   button.attach(BUTTON_PIN, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
-  mode = EEPROM.read(0);
 }
 
 bool strandUpdate(bool white) {
@@ -109,9 +118,9 @@ bool strandUpdate(bool white) {
     } else {
       color = colors[random(ncolors)];
     }
-    strip.setPixelColor(pos, color);
+    leds[pos] = color;
   } else {
-    strip.setPixelColor(pos, 0);
+    leds[pos] = 0;
   }
   group = (group + 1) % NUM_GROUPS;
 
@@ -122,19 +131,32 @@ bool strandUpdate(bool white) {
 bool morseUpdate() {
   static MorseEncoder enc;
   static unsigned long nextEventMillis = 0;
+  static bool ARK = true;
   unsigned long now = millis();
   bool ret = false;
 
   if (now >= nextEventMillis) {
     nextEventMillis = now + DIT_DURATION_MS;
     if (!enc.Tick()) {
-      char *message = messages[random(nmessages)];
-      enc.SetText(message);
-      enc.Quiet(200);
+      ARK = !ARK;
+      if (ARK) {
+        enc.SetText("ARK");
+        enc.Quiet(MORSE_PAUSE_WORD);
+      } else {
+#ifdef TINY
+        // I have tried twenty different ways to make this work on the ATTINY,
+        // including a big switch statement. It always freezes the program.
+        // I give up. Maybe it's a compiler bug having to do with a modulo.
+        enc.SetText(messages[0]);
+#else        
+        enc.SetText(messages[now % nmessages]);
+#endif
+        enc.Quiet(200);
+      }
     }
     ret = true;
   }
-  strip.setPixelColor(MORSE_PIXEL, enc.Transmitting ? MORSE_COLOR : 0);
+  leds[MORSE_PIXEL] = enc.Transmitting ? MORSE_COLOR : 0;
   return ret;
 }
 
@@ -146,7 +168,7 @@ bool black() {
     return false;
   }
 
-  strip.clear();
+  FastLED.clear();
 
   nextEventMillis = now + (DELAY_MS / NUM_GROUPS);  // Keep timing consistent
   return true;
@@ -169,7 +191,7 @@ void loop() {
   }
 
   if (update) {
-    strip.show();
+    FastLED.show();
   }
 
   // blink the heart for a little bit
