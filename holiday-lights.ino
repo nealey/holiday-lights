@@ -4,7 +4,9 @@
 
 #include <FastLED.h>
 #include "bounce2.h"
+#include "durations.h"
 #include "morse.h"
+#include "pulse.h"
 
 // Do you want it to run forever, or cycle every 24 hours?
 #ifdef TINY
@@ -14,8 +16,10 @@
 #endif
 
 // Which pin your LED strip is connected to
-#ifdef TINY
+#if defined(TINY)
 #define NEOPIXEL_PIN 3
+#elif defined(ADAFRUIT_TRINKET_M0)
+#define NEOPIXEL_PIN 2
 #else
 #define NEOPIXEL_PIN 6
 #endif
@@ -35,42 +39,40 @@
 // How many milliseconds between activity in one group
 #define DELAY_MS 600
 
+// Each group has this percentage chance of
+#define GROUP_UPDATE_PROBABILITY 25
+
 // What percentage chance a chosen light has of being on
 #define ACTIVITY 40
 
 // Which pixel to flash messages in morse code: -1 = disable
 #define MORSE_PIXEL 8
-#define MORSE_COLOR 0x880000
+#define MORSE_COLOR CRGB::Red
 
 // How long a dit lasts
-#define DIT_DURATION_MS 100
+#define DIT_DURATION_MS 150
 
 // Color for all-white mode
 #define WHITE 0x886655
-
-// Some units of time
-#define MILLISECOND 1L
-#define SECOND (1000 * MILLISECOND)
-#define MINUTE (60 * SECOND)
-#define HOUR (60 * MINUTE)
-#define DAY (24 * HOUR)
 
 // The Neopixel library masks interrupts while writing.
 // This means you lose time.
 // How much time do you lose?
 // I'm guessing 10 minutes a day.
 
-#define SNOSSLOSS_DAY (DAY - (10 * MINUTE))
-#define ON_FOR (5 * HOUR)
+#define SNOSSLOSS_DAY (DURATION_DAY - (10 * DURATION_MINUTE))
+#define ON_FOR (5 * DURATION_HOUR)
 
-const char *messages[] = {
-    "seasons greetings",
-    "happy holiday",
-    "merry xmas",
-    "happy new year",
-    "CQ CQ OF9X",
-};
-const int nmessages = sizeof(messages) / sizeof(*messages);
+#define ARK "\x03\x04"
+const char *message = (
+
+    "seasons greetings" ARK
+    "happy holiday" ARK
+    "merry xmas" ARK
+    "happy new year" ARK
+    "CQ CQ OF9X" ARK
+
+);
 
 // These colors mirror pretty closely some cheapo LED lights we have
 const uint32_t colors[] = {
@@ -100,78 +102,65 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 }
 
-bool strandUpdate(bool white) {
-  static unsigned long nextEventMillis = 0;
-  unsigned long now = millis();
-  static int group = 0;
+Pulse mainPulse = Pulse(DELAY_MS);
 
-  if (now < nextEventMillis) {
+bool strandUpdate(bool white) {
+  if (!mainPulse.Ticked()) {
     return false;
   }
 
-  int pos = (group * LEDS_PER_GROUP) + random(LEDS_PER_GROUP);
-  if (random(100) < ACTIVITY) {
-    uint32_t color;
+  for (int group = 0; group < NUM_GROUPS; ++group) {
+    int pos = (group * LEDS_PER_GROUP) + random(LEDS_PER_GROUP);
+    if (random(100) < GROUP_UPDATE_PROBABILITY) {
+      if (random(100) < ACTIVITY) {
+        uint32_t color;
 
-    if (white) {
-      color = WHITE;
-    } else {
-      color = colors[random(ncolors)];
+        if (white) {
+          color = WHITE;
+        } else {
+          color = colors[random(ncolors)];
+        }
+        leds[pos] = color;
+      } else {
+        leds[pos] = 0;
+      }
+      group = (group + 1) % NUM_GROUPS;
     }
-    leds[pos] = color;
-  } else {
-    leds[pos] = 0;
   }
-  group = (group + 1) % NUM_GROUPS;
 
-  nextEventMillis = now + (DELAY_MS / NUM_GROUPS);
   return true;
 }
 
-bool morseUpdate() {
-  static MorseEncoder enc;
-  static unsigned long nextEventMillis = 0;
-  static bool ARK = true;
-  unsigned long now = millis();
-  bool ret = false;
-
-  if (now >= nextEventMillis) {
-    nextEventMillis = now + DIT_DURATION_MS;
-    if (!enc.Tick()) {
-      ARK = !ARK;
-      if (ARK) {
-        enc.SetText("ARK");
-        enc.Quiet(MORSE_PAUSE_WORD);
-      } else {
-#ifdef TINY
-        // I have tried twenty different ways to make this work on the ATTINY,
-        // including a big switch statement. It always freezes the program.
-        // I give up. Maybe it's a compiler bug having to do with a modulo.
-        enc.SetText(messages[0]);
-#else        
-        enc.SetText(messages[now % nmessages]);
-#endif
-        enc.Quiet(200);
-      }
-    }
-    ret = true;
-  }
-  leds[MORSE_PIXEL] = enc.Transmitting ? MORSE_COLOR : 0;
-  return ret;
-}
-
 bool black() {
-  static unsigned long nextEventMillis = 0;
-  unsigned long now = millis();
-
-  if (now < nextEventMillis) {
+  if (!mainPulse.Ticked()) {
     return false;
   }
 
   FastLED.clear();
 
-  nextEventMillis = now + (DELAY_MS / NUM_GROUPS);  // Keep timing consistent
   return true;
+}
+
+bool morseUpdate() {
+  static MorseEncoder enc;
+  static Pulse pulse = Pulse(DIT_DURATION_MS);
+
+  leds[MORSE_PIXEL] = enc.Transmitting ? MORSE_COLOR : CRGB::Black;
+  if (pulse.Ticked()) {
+    if (!enc.Tick()) {
+      enc.SetText(message);
+    }
+    return true;
+  }
+  return false;
+}
+
+bool millisUpdate() {
+  unsigned long now = millis();
+  for (int i = 0; i < sizeof(unsigned long) * 8; ++i) {
+    leds[i] = CHSV(0, 255, bitRead(now, i) ? 32 : 0);
+  }
+  return false;
 }
 
 void loop() {
@@ -188,6 +177,7 @@ void loop() {
     update |= morseUpdate();
   } else {
     update |= black();
+    update |= millisUpdate();
   }
 
   if (update) {

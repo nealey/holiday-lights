@@ -6,6 +6,7 @@
 #define MORSE_DAH 3
 #define MORSE_PAUSE_LETTER 3
 #define MORSE_PAUSE_WORD 6
+#define MORSE_PAUSE_TRANSMISSION 50
 
 class MorseEncoder {
  public:
@@ -35,6 +36,6 @@ class MorseEncoder {
 
  private:
   const char *p;
-  uint8_t crumb;
+  uint8_t bit;
   int ticksLeft;
 };

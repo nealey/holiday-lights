@@ -1,41 +1,121 @@
 #include "morse.h"
 
-// Each morse dit/dah is stored as a nybble
-
-#define dit 1
-#define dah 3
-
-#define Pack(a, b, c, d) ((a << 0) | (b << 2) | (c << 4) | (d << 6))
-#define Unpack(m, pos) ((m >> (pos * 2)) & 0b11)
-
-const uint8_t MorseLetters[] = {
-    Pack(dit, dah, 0, 0),      // A
-    Pack(dah, dit, dit, dit),  // B
-    Pack(dah, dit, dah, dit),  // C
-    Pack(dah, dit, dit, 0),    // D
-    Pack(dit, 0, 0, 0),        // E
-    Pack(dit, dit, dah, dit),  // F
-    Pack(dah, dah, dit, 0),    // G
-    Pack(dit, dit, dit, dit),  // H
-    Pack(dit, dit, 0, 0),      // I
-    Pack(dit, dah, dah, dah),  // J
-    Pack(dah, dit, dah, 0),    // K
-    Pack(dit, dah, dit, dit),  // L
-    Pack(dah, dah, 0, 0),      // M
-    Pack(dah, dit, 0, 0),      // N
-    Pack(dah, dah, dah, 0),    // O
-    Pack(dit, dah, dah, dit),  // P
-    Pack(dah, dah, dit, dah),  // Q
-    Pack(dit, dah, dit, 0),    // R
-    Pack(dit, dit, dit, 0),    // S
-    Pack(dah, 0, 0, 0),        // T
-    Pack(dit, dit, dah, 0),    // U
-    Pack(dit, dit, dit, dah),  // V
-    Pack(dit, dah, dah, 0),    // W
-    Pack(dah, dit, dit, dah),  // X
-    Pack(dah, dit, dah, dah),  // Y
-    Pack(dah, dah, dit, dit),  // Z
+struct MorseSign {
+  // Length of this sign. If Length is 0, Bits is the duration of a pause.
+  uint8_t Length;
+  uint8_t Bits;
 };
+
+const struct MorseSign GetMorseSign(char c) {
+  switch (c) {
+    case 3:  // ETX - End of Text
+      return (struct MorseSign){8, 0b01010101};
+    case 4:  // EOT - End of Transmission
+      return (struct MorseSign){0, MORSE_PAUSE_TRANSMISSION};
+    case ' ':
+      return (struct MorseSign){0, MORSE_PAUSE_WORD};
+    case '0':
+      return (struct MorseSign){5, 0b11111};
+    case '1':
+      return (struct MorseSign){5, 0b01111};
+    case '2':
+      return (struct MorseSign){5, 0b00111};
+    case '3':
+      return (struct MorseSign){5, 0b00011};
+    case '4':
+      return (struct MorseSign){5, 0b00001};
+    case 5:
+      return (struct MorseSign){5, 0b00000};
+    case 6:
+      return (struct MorseSign){5, 0b10000};
+    case 7:
+      return (struct MorseSign){5, 0b11000};
+    case 8:
+      return (struct MorseSign){5, 0b11100};
+    case 9:
+      return (struct MorseSign){5, 0b11110};
+    case 'a':
+    case 'A':
+      return (struct MorseSign){2, 0b01};
+    case 'b':
+    case 'B':
+      return (struct MorseSign){4, 0b1000};
+    case 'c':
+    case 'C':
+      return (struct MorseSign){4, 0b1010};
+    case 'd':
+    case 'D':
+      return (struct MorseSign){3, 0b100};
+    case 'e':
+    case 'E':
+      return (struct MorseSign){1, 0b0};
+    case 'f':
+    case 'F':
+      return (struct MorseSign){4, 0b0010};
+    case 'g':
+    case 'G':
+      return (struct MorseSign){3, 0b110};
+    case 'h':
+    case 'H':
+      return (struct MorseSign){4, 0b0000};
+    case 'i':
+    case 'I':
+      return (struct MorseSign){2, 0b00};
+    case 'j':
+    case 'J':
+      return (struct MorseSign){4, 0b0111};
+    case 'k':
+    case 'K':
+      return (struct MorseSign){3, 0b101};
+    case 'l':
+    case 'L':
+      return (struct MorseSign){4, 0b0100};
+    case 'm':
+    case 'M':
+      return (struct MorseSign){2, 0b11};
+    case 'n':
+    case 'N':
+      return (struct MorseSign){2, 0b10};
+    case 'o':
+    case 'O':
+      return (struct MorseSign){3, 0b111};
+    case 'p':
+    case 'P':
+      return (struct MorseSign){4, 0b0110};
+    case 'q':
+    case 'Q':
+      return (struct MorseSign){4, 0b1101};
+    case 'r':
+    case 'R':
+      return (struct MorseSign){3, 0b010};
+    case 's':
+    case 'S':
+      return (struct MorseSign){3, 0b000};
+    case 't':
+    case 'T':
+      return (struct MorseSign){1, 0b1};
+    case 'u':
+    case 'U':
+      return (struct MorseSign){3, 0b001};
+    case 'v':
+    case 'V':
+      return (struct MorseSign){4, 0b0001};
+    case 'w':
+    case 'W':
+      return (struct MorseSign){3, 0b011};
+    case 'x':
+    case 'X':
+      return (struct MorseSign){4, 0b1001};
+    case 'y':
+    case 'Y':
+      return (struct MorseSign){4, 0b1011};
+    case 'z':
+    case 'Z':
+      return (struct MorseSign){4, 0b1100};
+    default:
+      return (struct MorseSign){0, 0};
+  }
+}
 
 MorseEncoder::MorseEncoder() {
   SetText("");
@@ -46,7 +126,7 @@ MorseEncoder::MorseEncoder(const char *s) {
 
 void MorseEncoder::SetText(const char *s) {
   p = s;
-  crumb = 0;
+  bit = 0;
   ticksLeft = 0;
   Transmitting = false;
 }
@@ -75,45 +155,29 @@ bool MorseEncoder::Tick() {
     return true;
   }
 
-  // If that was the end of the letter, we have to pause more
-  if (crumb == 4) {
-    crumb = 0;
-    ++p;
-    ticksLeft = MORSE_PAUSE_LETTER - MORSE_DIT;
-    return true;
-  }
-
-  switch (*p) {
-    case '\0':
-      return false;
-    case 'a' ... 'z':
-      Transmitting = true;
-      ticksLeft = Unpack(MorseLetters[*p - 'a'], crumb++);
-      break;
-    case 'A' ... 'Z':
-      Transmitting = true;
-      ticksLeft = Unpack(MorseLetters[*p - 'A'], crumb++);
-      break;
-    case ' ':
-      crumb = 0;
-      ++p;
-      Transmitting = false;
-      ticksLeft = MORSE_PAUSE_WORD - MORSE_DIT;
-      break;
-    default:  // this should never happen! Transmit for a word pause to indicate weirdness.
-      crumb = 0;
-      ++p;
-      Transmitting = true;
-      ticksLeft = MORSE_PAUSE_WORD;
-      break;
-  }
-  if (0 == ticksLeft) {
-    // Unpack can return 0 if there are fewer than 4 emissions for a letter.
-    // In that case, we 're done with the letter.
-    crumb = 0;
-    ++p;
+  const struct MorseSign sign = GetMorseSign(*p);
+  if (sign.Length == 0) {
+    // Pause
     Transmitting = false;
-    ticksLeft = MORSE_PAUSE_LETTER - MORSE_DIT;
+    ticksLeft = sign.Bits - (MORSE_PAUSE_LETTER - MORSE_DIT);
+    ++p;
+    bit = 0;
+  } else if (bit == sign.Length) {
+    // All done with that sign!
+    Transmitting = false;
+    ticksLeft = MORSE_PAUSE_LETTER;
+    ++p;
+    bit = 0;
+  } else {
+    // Sign
+    uint8_t bitMask = 1 << (sign.Length - bit - 1);
+    Transmitting = true;
+    if (sign.Bits & bitMask) {
+      ticksLeft = MORSE_DAH;
+    } else {
+      ticksLeft = MORSE_DIT;
+    }
+    ++bit;
   }
 
   return true;
