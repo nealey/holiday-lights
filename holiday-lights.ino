@@ -3,7 +3,7 @@
 #endif
 
 #include <FastLED.h>
-#include "bounce2.h"
+#include "Debounce.h"
 #include "durations.h"
 #include "morse.h"
 #include "pulse.h"
@@ -74,32 +74,30 @@ const char *message = (
 
 );
 
-// These colors mirror pretty closely some cheapo LED lights we have
-const uint32_t colors[] = {
-    0xdd4400,  // Yellow
-    0xff0000,  // Red
-    0xdd2200,  // Amber
-    0x004400,  // Green
-
-    0xdd4400,  // Yellow
-    0xff0000,  // Red
-    0xdd2200,  // Amber
-    0x880044,  // Purple
-
-    0xdd4400,  // Yellow
-    0xff0000,  // Red
-    0xdd2200,  // Amber
-    0x000088,  // Blue
-};
-const int ncolors = sizeof(colors) / sizeof(*colors);
-
 CRGB leds[NUM_LEDS];
-Bounce button;
+Debounce button(BUTTON_PIN, false, true);
 
 void setup() {
   FastLED.addLeds<WS2812, NEOPIXEL_PIN, RGB>(leds, NUM_LEDS);
-  button.attach(BUTTON_PIN, INPUT_PULLUP);
+  FastLED.setBrightness(52);
   pinMode(LED_BUILTIN, OUTPUT);
+}
+
+uint8_t RandomHue() {
+  switch (random(12)) {
+    case 0 ... 2:
+      return 52; // reddish yellow
+    case 3 ... 5:
+      return HUE_RED;
+    case 6 ... 8:
+      return 28; // reddish orange
+    case 9:
+      return HUE_BLUE;
+    case 10:
+      return HUE_GREEN;
+    case 11:
+      return 204; // reddish purple
+  }
 }
 
 Pulse mainPulse = Pulse(DELAY_MS);
@@ -112,18 +110,19 @@ bool strandUpdate(bool white) {
   for (int group = 0; group < NUM_GROUPS; ++group) {
     int pos = (group * LEDS_PER_GROUP) + random(LEDS_PER_GROUP);
     if (random(100) < GROUP_UPDATE_PROBABILITY) {
+      uint8_t hue = 0;
+      uint8_t saturation = 255;
+      uint8_t value = 255;
       if (random(100) < ACTIVITY) {
-        uint32_t color;
-
         if (white) {
-          color = WHITE;
+          saturation = 0;
         } else {
-          color = colors[random(ncolors)];
+          hue = RandomHue();
         }
-        leds[pos] = color;
       } else {
-        leds[pos] = 0;
+        value = 0;
       }
+      leds[pos] = CHSV(hue, saturation, value);
       group = (group + 1) % NUM_GROUPS;
     }
   }
@@ -144,15 +143,17 @@ bool black() {
 bool morseUpdate() {
   static MorseEncoder enc;
   static Pulse pulse = Pulse(DIT_DURATION_MS);
+  bool ret = false;
 
-  leds[MORSE_PIXEL] = enc.Transmitting ? MORSE_COLOR : CRGB::Black;
   if (pulse.Ticked()) {
     if (!enc.Tick()) {
       enc.SetText(message);
     }
-    return true;
+    ret = true;
   }
-  return false;
+  leds[MORSE_PIXEL] = enc.Transmitting ? MORSE_COLOR : CRGB::Black;
+
+  return ret;
 }
 
 bool millisUpdate() {
@@ -164,13 +165,11 @@ bool millisUpdate() {
 }
 
 void loop() {
-  static bool white = false;
+  bool white = false;
   bool update = false;
 
-  button.update();
-  if (button.fell()) {
-    white = !white;
-  }
+  button.read();
+  white = (button.count() % 2 == 1);
 
   if (FOREVER || white || (millis() % SNOSSLOSS_DAY < ON_FOR)) {
     update |= strandUpdate(white);
