@@ -8,8 +8,10 @@ Pulse::Pulse(unsigned long period) {
 }
 
 bool Pulse::Ticked() {
-  unsigned long now = millis();
+  return Ticked(millis());
+}
 
+bool Pulse::Ticked(unsigned long now) {
   if (now >= nextEventMillis) {
     Until(period, now);
     return true;

@@ -61,7 +61,7 @@
 // I'm guessing 10 minutes a day.
 
 #define SNOSSLOSS_DAY (DURATION_DAY - (10 * DURATION_MINUTE))
-#define ON_FOR (5 * DURATION_HOUR)
+#define ON_FOR (6 * DURATION_HOUR)
 
 #define ARK "\x03\x04"
 const char *message = (
@@ -102,8 +102,8 @@ uint8_t RandomHue() {
 
 Pulse mainPulse = Pulse(DELAY_MS);
 
-bool strandUpdate(bool white) {
-  if (!mainPulse.Ticked()) {
+bool strandUpdate(unsigned long now, bool white) {
+  if (!mainPulse.Ticked(now)) {
     return false;
   }
 
@@ -130,8 +130,8 @@ bool strandUpdate(bool white) {
   return true;
 }
 
-bool black() {
-  if (!mainPulse.Ticked()) {
+bool black(unsigned long now) {
+  if (!mainPulse.Ticked(now)) {
     return false;
   }
 
@@ -140,12 +140,12 @@ bool black() {
   return true;
 }
 
-bool morseUpdate() {
+bool morseUpdate(unsigned long now) {
   static MorseEncoder enc;
   static Pulse pulse = Pulse(DIT_DURATION_MS);
   bool ret = false;
 
-  if (pulse.Ticked()) {
+  if (pulse.Ticked(now)) {
     if (!enc.Tick()) {
       enc.SetText(message);
     }
@@ -156,10 +156,18 @@ bool morseUpdate() {
   return ret;
 }
 
-bool millisUpdate() {
-  unsigned long now = millis();
-  for (int i = 0; i < sizeof(unsigned long) * 8; ++i) {
-    leds[i] = CHSV(0, 255, bitRead(now, i) ? 32 : 0);
+bool timeUpdate(unsigned long now, unsigned long timeLeft) {
+  unsigned int hoursLeft = timeLeft / DURATION_HOUR;
+  unsigned int minutesLeft = (timeLeft / DURATION_MINUTE) % 60;
+
+  int i;
+  for (i = 0; i < hoursLeft; ++i) {
+    leds[i] = CHSV(0, 255, 32);
+  }
+  if ((timeLeft / DELAY_MS) % minutesLeft == 0) {
+    leds[i]= CHSV(0, 255, 32);
+  } else {
+    leds[i] = CRGB::Black;
   }
   return false;
 }
@@ -167,16 +175,18 @@ bool millisUpdate() {
 void loop() {
   bool white = false;
   bool update = false;
+  unsigned long now = millis(); // Everybody uses the same time so we don't do spurious updates 5ms apart
+  unsigned long timeOfDay = now % DURATION_DAY;
 
   button.read();
   white = (button.count() % 2 == 1);
 
-  if (FOREVER || white || (millis() % SNOSSLOSS_DAY < ON_FOR)) {
-    update |= strandUpdate(white);
-    update |= morseUpdate();
+  if (FOREVER || white || (timeOfDay < ON_FOR)) {
+    update |= strandUpdate(now, white);
+    update |= morseUpdate(now);
   } else {
-    update |= black();
-    update |= millisUpdate();
+    update |= black(now);
+    update |= timeUpdate(now, DURATION_DAY - timeOfDay);
   }
 
   if (update) {

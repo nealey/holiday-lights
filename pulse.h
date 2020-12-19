@@ -7,6 +7,7 @@ public:
   
   /** Ticked tells you if a period has elapsed. */
   bool Ticked();
+  bool Ticked(unsigned long now);
 
   /** Until sets the duration of the next period. */
   void Until(unsigned long next);
