@@ -1,39 +1,20 @@
-#if defined(__AVR_ATtiny85__)
-#define TINY
-#endif
-
 #include <FastLED.h>
 #include "Debounce.h"
 #include "durations.h"
 #include "morse.h"
 #include "pulse.h"
 
-// Do you want it to run forever, or cycle every 24 hours?
-#ifdef TINY
-#define FOREVER true
-#else
-#define FOREVER false
-#endif
-
-// Which pin your LED strip is connected to
-#if defined(TINY)
-#define NEOPIXEL_PIN 3
-#elif defined(ADAFRUIT_TRINKET_M0)
-#define NEOPIXEL_PIN 2
-#else
-#define NEOPIXEL_PIN 6
-#endif
+// Which pins your LED strips are connected to
+#define NUM_OUTPUTS 2
+#define OUTPUT_PIN1 7
+#define OUTPUT_PIN2 8
 
 // Which pin has the momentary switch to toggle full white.
 #define BUTTON_PIN 4
 
-// How many LEDs you have. It's okay if this is too big.
+// How many LEDs you have per output. It's okay if this is too big.
 #define LEDS_PER_GROUP 10
-#ifdef TINY
-#define NUM_GROUPS 7
-#else
-#define NUM_GROUPS 20
-#endif
+#define NUM_GROUPS 10
 #define NUM_LEDS (LEDS_PER_GROUP * NUM_GROUPS)
 
 // How many milliseconds between activity in one group
@@ -52,33 +33,22 @@
 // How long a dit lasts
 #define DIT_DURATION_MS 150
 
-// Color for all-white mode
-#define WHITE 0x886655
-
-// The Neopixel library masks interrupts while writing.
-// This means you lose time.
-// How much time do you lose?
-// I'm guessing 10 minutes a day.
-
-#define SNOSSLOSS_DAY (DURATION_DAY - (10 * DURATION_MINUTE))
-#define ON_FOR (6 * DURATION_HOUR)
-
 #define ARK "\x03\x04"
 const char *message = (
-
     "seasons greetings" ARK
     "happy holiday" ARK
     "merry xmas" ARK
     "happy new year" ARK
     "CQ CQ OF9X" ARK
-
 );
 
-CRGB leds[NUM_LEDS];
+CRGB leds[NUM_OUTPUTS][NUM_LEDS];
 Debounce button(BUTTON_PIN, false, true);
 
 void setup() {
-  FastLED.addLeds<WS2812, NEOPIXEL_PIN, RGB>(leds, NUM_LEDS);
+  FastLED.addLeds<WS2812, OUTPUT_PIN1, RGB>(leds[0], NUM_LEDS);
+  FastLED.addLeds<WS2812, OUTPUT_PIN2, RGB>(leds[1], NUM_LEDS);
+  FastLED.setTemperature(Tungsten40W);
   FastLED.setBrightness(52);
   pinMode(LED_BUILTIN, OUTPUT);
 }
@@ -100,42 +70,30 @@ uint8_t RandomHue() {
   }
 }
 
-Pulse mainPulse = Pulse(DELAY_MS);
 
 bool strandUpdate(unsigned long now, bool white) {
-  if (!mainPulse.Ticked(now)) {
+  static Pulse pulse = Pulse(DELAY_MS);
+  if (!pulse.Ticked(now)) {
     return false;
   }
 
-  for (int group = 0; group < NUM_GROUPS; ++group) {
-    int pos = (group * LEDS_PER_GROUP) + random(LEDS_PER_GROUP);
-    if (random(100) < GROUP_UPDATE_PROBABILITY) {
-      uint8_t hue = 0;
-      uint8_t saturation = 255;
-      uint8_t value = 255;
-      if (random(100) < ACTIVITY) {
-        if (white) {
-          saturation = 0;
-        } else {
+  for (int output = 0; output < NUM_OUTPUTS; output += 1) {
+    for (int group = 0; group < NUM_GROUPS; group += 1) {
+      int pos = (group * LEDS_PER_GROUP) + random(LEDS_PER_GROUP);
+      if (random(100) < GROUP_UPDATE_PROBABILITY) {
+        uint8_t hue = 0;
+        uint8_t saturation = white?0:255;
+        uint8_t value = 255;
+        if (random(100) < ACTIVITY) {
           hue = RandomHue();
+        } else {
+          value = 0;
         }
-      } else {
-        value = 0;
+        leds[output][pos] = CHSV(hue, saturation, value);
+        group = (group + 1) % NUM_GROUPS;
       }
-      leds[pos] = CHSV(hue, saturation, value);
-      group = (group + 1) % NUM_GROUPS;
     }
   }
-
-  return true;
-}
-
-bool black(unsigned long now) {
-  if (!mainPulse.Ticked(now)) {
-    return false;
-  }
-
-  FastLED.clear();
 
   return true;
 }
@@ -143,51 +101,28 @@ bool black(unsigned long now) {
 bool morseUpdate(unsigned long now) {
   static MorseEncoder enc;
   static Pulse pulse = Pulse(DIT_DURATION_MS);
-  bool ret = false;
-
-  if (pulse.Ticked(now)) {
-    if (!enc.Tick()) {
-      enc.SetText(message);
-    }
-    ret = true;
+  if (!pulse.Ticked(now)) {
+    return false;
   }
-  leds[MORSE_PIXEL] = enc.Transmitting ? MORSE_COLOR : CRGB::Black;
 
-  return ret;
-}
-
-bool timeUpdate(unsigned long now, unsigned long timeLeft) {
-  unsigned int hoursLeft = timeLeft / DURATION_HOUR;
-  unsigned int minutesLeft = (timeLeft / DURATION_MINUTE) % 60;
-
-  int i;
-  for (i = 0; i < hoursLeft; ++i) {
-    leds[i] = CHSV(0, 255, 32);
+  if (!enc.Tick()) {
+    enc.SetText(message);
   }
-  if ((timeLeft / DELAY_MS) % minutesLeft == 0) {
-    leds[i]= CHSV(0, 255, 32);
-  } else {
-    leds[i] = CRGB::Black;
-  }
-  return false;
+  leds[0][MORSE_PIXEL] = enc.Transmitting ? MORSE_COLOR : CRGB::Black;
+
+  return true;
 }
 
 void loop() {
   bool white = false;
   bool update = false;
   unsigned long now = millis(); // Everybody uses the same time so we don't do spurious updates 5ms apart
-  unsigned long timeOfDay = now % DURATION_DAY;
 
   button.read();
   white = (button.count() % 2 == 1);
 
-  if (FOREVER || white || (timeOfDay < ON_FOR)) {
-    update |= strandUpdate(now, white);
-    update |= morseUpdate(now);
-  } else {
-    update |= black(now);
-    update |= timeUpdate(now, DURATION_DAY - timeOfDay);
-  }
+  update |= strandUpdate(now, white);
+  //update |= morseUpdate(now);
 
   if (update) {
     FastLED.show();
