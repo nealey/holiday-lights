@@ -3,6 +3,8 @@ Holiday Lights
 
 Some twinkling lights for your tree/menorah/office/door/roof/habitrail.
 
+The canonical home for this code is https://git.woozle.org/neale/holiday-lights
+
 
 Materials
 ---------
